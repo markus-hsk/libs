@@ -8,7 +8,7 @@ namespace MBuscher;
  * 
  * @see https://blog.graphiq.com/500x-faster-caching-than-redis-memcache-apc-in-php-hhvm-dcd26e8447ad#.u0p11a2q3
  * 
- * @author	Markus Buscher <markus@buscher.de>
+ * @author	Markus Buscher <blackpanther.online@gmx.de>
  */
 class Cache
 {
