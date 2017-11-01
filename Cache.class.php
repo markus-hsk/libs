@@ -2,9 +2,6 @@
 
 namespace MBuscher;
 
-
-use Symfony\Component\Validator\Constraints\Optional;
-
 /**
  * Allows the application to create cache-entries on the filesystem which can be loaded really fast through the
  * operationg system/ SSD drives.
@@ -121,7 +118,7 @@ class Cache
 	/**
 	 * Reads and sets the default caching expiration time
 	 * 
-	 * @param	int		$set_default		[Optional]
+	 * @param	int		$set_default		[optional]
 	 * @return	int
 	 * @static
 	 */
