@@ -14,7 +14,7 @@ class Cache
 {
 	private static $cache_dir = null;
 	private static $default_expire = null;
-	private static $active = true;
+	private static $active = false;			// per default the Caching system is disabled
 
 
 	/**
@@ -28,14 +28,14 @@ class Cache
 	 */
 	public static function set($key, $value, $expire = null)
 	{
-		if(!static::$active)
+		if(!static::$active || $expire === 0)
 			return 0;
 		
 		if($expire === null)
 		{
 			$expire = static::defaultExpire();
 		}
-		else if(!is_int($expire) || $expire <= 0)
+		else if(!is_int($expire) || $expire < 0)
 		{
 			trigger_error('The expire has to be a positive integer', E_USER_ERROR);
 			return false;
@@ -43,10 +43,15 @@ class Cache
 			
 		$expire_ts = time() + $expire;
 
-		$cache_key   = static::buildCacheKey($key);
-		$cache_value = base64_encode(serialize($value));
-
-    	return file_put_contents($cache_key, '<?php if(time()<'.$expire_ts.'){$cached_value=\''.$cache_value.'\';}else{@unlink(__FILE__);}') > 0;
+		$cache_key = static::buildCacheKey($key);
+		if($cache_key && strlen($cache_key))
+		{
+			$cache_value = base64_encode(serialize($value));
+			
+			return file_put_contents($cache_key, '<?php if(time()<'.$expire_ts.'){$cached_value=\''.$cache_value.'\';}else{@unlink(__FILE__);}') > 0;
+		}
+		
+		return false;
 	}
 
 
@@ -63,10 +68,14 @@ class Cache
 			return false;
 
 		$cache_key = static::buildCacheKey($key);
-
-		@include $cache_key;
-
-		return isset($cached_value) ? unserialize(base64_decode($cached_value)) : false;
+		if($cache_key && strlen($cache_key))
+		{
+			@include $cache_key;
+			
+			return isset($cached_value) ? unserialize(base64_decode($cached_value)) : false;
+		}
+		
+		return false;
 	}
 
 
@@ -83,11 +92,15 @@ class Cache
 			return false;
 
 		$cache_key = static::buildCacheKey($key);
-
-		if(file_exists($cache_key))
-			return unlink($cache_key);
-		else
-			return false;
+		if($cache_key && strlen($cache_key))
+		{
+			if(file_exists($cache_key))
+			{
+				return unlink($cache_key);
+			}
+		}
+		
+		return false;
 	}
 
 	
@@ -128,7 +141,7 @@ class Cache
 		{
 			static::$default_expire = (int)$set_default;
 		}
-		else if($set_default !== null && (int)$set_default <= 0)
+		else if($set_default !== null && (int)$set_default < 0)
 		{
 			trigger_error('The expire has to be a positive integer', E_USER_ERROR);
 			return false;
@@ -138,12 +151,16 @@ class Cache
 		{
 			$env = getenv('cache_default_expire');
 		
-			if(!$env)
+			if(!is_int($env))
 			{
-				trigger_error('The environment configuration cache_default_expire is not set', E_USER_ERROR);
+				trigger_error('The environment configuration cache_default_expire is not set', E_USER_NOTICE);
+				
+				static::$default_expire = 0;
 			}
-		
-			static::defaultExpire($env);
+			else
+			{
+				static::defaultExpire($env);
+			}
 		}
 		
 		return static::$default_expire;
@@ -154,7 +171,7 @@ class Cache
 	 * Reads and sets the default caching directory
 	 * 
 	 * @param	string	$dir_path		Path to the directory for the cache files
-	 * @return	string
+	 * @return	string|bool
 	 * @static
 	 */
 	public static function cacheDir($dir_path = '')
@@ -175,7 +192,8 @@ class Cache
 				
 			if(!strlen($env))
 			{
-				trigger_error('The environment configuration cache_dir is not set', E_USER_ERROR);
+				trigger_error('The environment configuration cache_dir is not set', E_USER_NOTICE);
+				static::$cache_dir = '';
 			}
 				
 			static::cacheDir($env);
@@ -189,7 +207,7 @@ class Cache
 	 * Creates the internal key name by hashing the given key
 	 * 
 	 * @param	string	$key
-	 * @return	string
+	 * @return	string|bool
 	 * @static
 	 */
 	protected static function buildCacheKey($key)
@@ -197,6 +215,12 @@ class Cache
 		$cache_key = md5($key);
 		
 		$cache_dir = static::cacheDir();
+		
+		if(!$cache_dir || !strlen($cache_dir))
+		{
+			return false;
+		}
+		
 		$cache_key = $cache_dir . "/$cache_key.cached";
 
 		return $cache_key;
