@@ -23,30 +23,64 @@ final class MySqlDb
 	protected $db_user		= '';
 	protected $db_password	= '';
 	protected $db_database  = '';
-	
+
 	/** @var string $table_prefix allows to define a prefix for the tables names to be automatically prepended on the given tables */
 	protected $table_prefix = '';
 	
+	protected $use_cache = false;
+
 	/** @var mysqli $db */
 	protected $db = null;
-	
+
 	protected $result = null;
 
 
-
-	function __construct($host, $port, $user, $password, $database, $table_prefix = '')
+	// ##### Magic methods ############################################################################################
+	
+	/**
+	 * Constructor, builds a new instance
+	 * 
+	 * @param	string		$host
+	 * @param	int			$port
+	 * @param	string		$user
+	 * @param	string		$password
+	 * @param	string		$database
+	 * @param	array		$options
+	 * @return	MySqlDb
+	 */
+	function __construct($host, $port, $user, $password, $database, array $options = [])
 	{
 		$this->db_host		= $host;
 		$this->db_port		= $port;
 		$this->db_user 		= $user;
 		$this->db_password	= $password;
 		$this->db_database	= $database;
-		$this->table_prefix	= $table_prefix;
+
+		if(isset($options['use_cache']))
+		{
+			$this->useCache($options['use_cache']);
+			unset($options['use_cache']);
+		}
 		
+		if(isset($options['table_prefix']))
+		{
+			$this->tablePrefix($options['table_prefix']);
+			unset($options['table_prefix']);
+		}
+
 		$this->connect();
 	}
 	
 	
+	
+	// ##### Setters and Getters ######################################################################################
+
+	/**
+	 * Sets the connection and gets the connection state
+	 * 
+	 * @param	void
+	 * @return 	boolean
+	 */
 	protected function connect()
 	{
 		if($this->db === null)
@@ -55,21 +89,64 @@ final class MySqlDb
 			$this->db = mysqli_connect($this->db_host, $this->db_user, $this->db_password, $this->db_database, $this->db_port);
 			mysqli_set_charset($this->db, 'utf8');
 		}
-
+	
 		return true;
 	}
 	
-	
-	public function select($table, array $fields = [], array $filter = null, array $sort = null, array $limit = null, array $options = [])
+
+	/**
+	 * Gets and sets the parameter for cache usage
+	 *
+	 * @param	boolean	$use_cache
+	 * @return	boolean
+	 */
+	function useCache($use_cache = null)
 	{
-		$cache_key = $this->getCacheKey('select', func_get_args());
-		if(($cached = Cache::get($cache_key)) !== false)
+		if($use_cache !== null)
 		{
-			return $cached;
+			$this->use_cache = (bool) $use_cache;
+		}
+
+		return $this->use_cache;
+	}
+	
+	
+	/**
+	 * Gets and sets the parameter for the table prefix
+	 * 
+	 * @param	string		$set_prefix
+	 * @return	string
+	 */
+	function tablePrefix($set_prefix = null)
+	{
+		if(strlen($set_prefix) > 0)
+		{
+			$this->table_prefix = $set_prefix;
 		}
 		
+		return $this->table_prefix;
+	}
+
+	
+	
+	
+	// ###### Interacting #############################################################################################
+
+
+	public function select($table, array $fields = [], array $filter = null, array $sort = null, array $limit = null, array $options = [])
+	{
+		$use_cache = isset($options['use_cache']) ? (bool)$options['use_cache'] : $this->useCache();
+		if($use_cache)
+		{
+			$cache_key = $this->getCacheKey('select', func_get_args());
+			if(($cached = Cache::get($cache_key)) !== false)
+			{
+				return $cached;
+			}
+		}
+
 		$sql = "SELECT ";
-		
+
 		// append the field list
 		if(count($fields) == 0)
 		{
@@ -79,37 +156,38 @@ final class MySqlDb
 		{
 			$sql .= "`" . implode("`, `", $fields) . "` ";
 		}
-		
+
 		// append table name
-		$sql .= " FROM `".$this->table_prefix . $table . "` ";
-		
+		$table_prefix = isset($options['table_prefix']) ? $options['table_prefix'] : $this->tablePrefix();
+		$sql .= "FROM `".$table_prefix . $table . "` ";
+
 		$where = $this->buildWhere($filter);
 		if(strlen($where))
 		{
 			$sql .= "WHERE $where ";
 		}
-		
+
 		if(is_array($sort))
 		{
 			$order_by = "";
-				
+
 			foreach($sort as $field => $dir)
 			{
 				$order_by .= "`$field` ".($dir == SORT_DESC ? 'DESC' : 'ASC')." ";
 			}
-				
+
 			if(strlen($order_by))
 			{
 				$sql .= "ORDER BY $order_by";
 			}
 		}
-		
+
 		if(is_array($limit))
 		{
 			list($skip, $amount) = $limit;
 			$sql .= "LIMIT $skip,$amount";
 		}
-		echo $sql;
+
 		if($result = mysqli_query($this->db, $sql))
 		{
 			$records = array();
@@ -117,10 +195,64 @@ final class MySqlDb
 			{
 				$records[] = $data;
 			}
-			
-			Cache::set($cache_key, $records);
 				
+			if($use_cache)
+			{
+				Cache::set($cache_key, $records);
+			}
+
 			return $records;
+		}
+		else
+		{
+			$error_code = mysqli_errno($this->db);
+			$error_message = mysqli_error($this->db);
+				
+			throw new MySqlDbException($error_message, $error_code);
+		}
+	}
+		
+	
+	public function insert($table, array $set_array, array $options = [])
+	{
+		if(!count($set_array))
+		{
+			throw new MySqlDbException('Insert need at minimum one field to be set', -1); // @todo define Error codes
+		}
+		
+		if(isset($options['replace']) && $options['replace'] == true)
+		{
+			$sql = "REPLACE INTO ";
+		}
+		else
+		{
+			if(isset($options['ignore_duplicate']) && $options['ignore_duplicate'] == true)
+			{
+				$sql = "INSERT IGNORE INTO ";
+			}
+			else
+			{
+				$sql = "INSERT INTO ";
+			}
+		}
+		
+		$table_prefix = isset($options['table_prefix']) ? $options['table_prefix'] : $this->tablePrefix();
+		$sql .= "`".$table_prefix . $table . "` ";
+		
+		$sql .= "SET ";
+		
+		$settings = array();
+		foreach($set_array as $field => $value)
+		{
+			$settings[] = "`$field` = ".$this->toSql($value);
+		}
+		
+		$sql .= implode(", ", $settings);
+		
+		$result = $this->db->query($sql);
+		if($result && !mysqli_errno($this->db))
+		{
+			return $this->db->affected_rows;
 		}
 		else
 		{
@@ -132,13 +264,90 @@ final class MySqlDb
 	}
 	
 	
+	public function replace($table, array $set_array, array $options = [])
+	{
+		$options = array_merge($options, ['replace' => true]);
+		
+		return $this->insert($table, $set_array, $options);
+	}
 	
+	
+	public function update($table, array $filter, array $set_array, array $options = [])
+	{
+		if(!count($set_array))
+		{
+			throw new MySqlDbException('Insert need at minimum one field to be set', -1); // @todo define Error codes
+		}
+		
+		$sql = "UPDATE ";
+		
+		$table_prefix = isset($options['table_prefix']) ? $options['table_prefix'] : $this->tablePrefix();
+		$sql .= "`".$table_prefix . $table . "` ";
+		
+		$settings = array();
+		foreach($set_array as $field => $value)
+		{
+			$settings[] = "`$field` = ".$this->toSql($value);
+		}
+		
+		$sql .= "SET " . implode(", ", $settings) . " ";
+		
+		$where = $this->buildWhere($filter);
+		if(strlen($where))
+		{
+			$sql .= "WHERE $where ";
+		}
+		
+		$result = $this->db->query($sql);
+		if($result && !mysqli_errno($this->db))
+		{
+			return $this->db->affected_rows;
+		}
+		else
+		{
+			$error_code = mysqli_errno($this->db);
+			$error_message = mysqli_error($this->db);
+				
+			throw new MySqlDbException($error_message, $error_code);
+		}
+	}
+	
+	
+	public function delete($table, array $filter, array $options = [])
+	{
+		$sql = "DELETE ";
+		
+		// append table name
+		$table_prefix = isset($options['table_prefix']) ? $options['table_prefix'] : $this->tablePrefix();
+		$sql .= "FROM `".$table_prefix . $table . "` ";
+		
+		$where = $this->buildWhere($filter);
+		if(strlen($where))
+		{
+			$sql .= "WHERE $where ";
+		}
+		
+		$result = $this->db->query($sql);
+		if($result && !mysqli_errno($this->db))
+		{
+			return $this->db->affected_rows;
+		}
+		else
+		{
+			$error_code = mysqli_errno($this->db);
+			$error_message = mysqli_error($this->db);
+		
+			throw new MySqlDbException($error_message, $error_code);
+		}
+	}
+	
+
 	protected function buildWhere(array $filter = null)
 	{
 		if(is_array($filter) && count($filter) > 0)
 		{
 			$wheres = array();
-	
+
 			foreach($filter as $key => $value)
 			{
 				switch($key)
@@ -146,7 +355,7 @@ final class MySqlDb
 					case '$like':
 						$wheres[] = "`$key` LIKE '$value'";
 						break;
-	
+
 					default:
 						if(!is_numeric($value))
 						{
@@ -163,7 +372,7 @@ final class MySqlDb
 						break;
 				}
 			}
-	
+
 			return implode(' AND ', $wheres);
 		}
 		else
@@ -171,15 +380,15 @@ final class MySqlDb
 			return '';
 		}
 	}
-	
+
 	protected function toSql($value, $value_type = '', $empty_as = '')
 	{
 		if($value === NULL)
 		{
 			if($empty_as === NULL)
 				return 'NULL';
-			else
-				$value = $empty_as;
+				else
+					$value = $empty_as;
 		}
 
 		switch($value_type)
@@ -196,9 +405,9 @@ final class MySqlDb
 				$float = floatval(str_replace(',', '.', $value));
 				if((String) $float == 'INF')
 					return 0;
-				else
-					return $float;
-				break;
+					else
+						return $float;
+						break;
 
 			case 'unixts':		// Wenn ein Zeitstempel erwartet wird
 			case dbDate:		// Wenn ein Datumswert erwartet wird
@@ -207,8 +416,8 @@ final class MySqlDb
 				{
 					if($value > 0)
 						return "'".date('Y-m-d H:i:s', $value)."'";
-					else
-						return "'0000-00-00 00:00:00'";
+						else
+							return "'0000-00-00 00:00:00'";
 				}
 				else {
 					if (is_string($value) && strlen($value) == 0) {
@@ -226,13 +435,13 @@ final class MySqlDb
 				{
 					if($value > 0)
 						return "'".date('H:i:s', $value)."'";
-					else
-						return "'00:00:00'";
+						else
+							return "'00:00:00'";
 				}
 				else
 					return "'".date('H:i:s', strtotime($value))."'";
-				/* Der Wert wird umgewandelt in einen Zeitstempel und dann als normaler Text weiter verarbeitet */
-				break;
+					/* Der Wert wird umgewandelt in einen Zeitstempel und dann als normaler Text weiter verarbeitet */
+					break;
 
 
 			case '':
@@ -243,13 +452,17 @@ final class MySqlDb
 				break;
 		}
 	}
+
 	
 	protected function getCacheKey()
 	{
 		$args = serialize(func_get_args());
-		
+
 		return 'MySqlDb '.$this->db_host.':'.$this->db_port.' '.$this->db_database.' '.$this->table_prefix.' '.$args;
 	}
+
+
+
 }
 
 
@@ -257,18 +470,21 @@ final class MySqlDbStatic
 {
 	/** @var MySqlDb $db_instance */
 	protected static $db_instance;
-	
-	
+
+
 	private function __construct(){}
 	private function __clone(){}
-	
-	
-	static function connect($host, $port, $user, $password, $database, $table_prefix = '')
+
+
+	/**
+	 * @see	MySqlDb::__construct()
+	 */
+	static function connect($host, $port, $user, $password, $database, array $options = [])
 	{
-		static::$db_instance = new MySqlDb($host, $port, $user, $password, $database, $table_prefix);
+		static::$db_instance = new MySqlDb($host, $port, $user, $password, $database, $options);
 	}
-	
-	
+
+
 	/**
 	 * @param	void
 	 * @return 	MySqlDb
@@ -279,15 +495,28 @@ final class MySqlDbStatic
 		{
 			trigger_error('There is no static instance connected yet', E_USER_ERROR);
 		}
-	
+
 		return static::$db_instance;
 	}
-	
-	
-	
+
+
+	/**
+	 * @see	MySqlDb::select()
+	 */
 	public static function select($table, array $fields = [], array $filter = null, array $sort = null, array $limit = null, array $options = [])
 	{
 		return static::getDbInstance()->select($table, $fields, $filter, $sort, $limit, $options);
+	}
+	
+	
+	public static function insert($table, array $set_array, array $options = [])
+	{
+		return static::getDbInstance()->insert($table, $set_array, $options);
+	}
+	
+	public static function replace($table, array $set_array, array $options = [])
+	{
+		return static::getDbInstance()->replace($table, $set_array, $options);
 	}
 }
 
