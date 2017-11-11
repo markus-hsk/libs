@@ -331,7 +331,7 @@ abstract class BasicModel
 			{
 				static::setLastUpdate();
 	
-				Debugger::log('Delete ' . static::getTableName(), 'Delete ' . static::getTableName() . ' #' . $this->get('_id'));
+				// @todo Debugger::log('Delete ' . static::getTableName(), 'Delete ' . static::getTableName() . ' #' . $this->get('_id'));
 	
 				$done = $this->afterDelete();
 	
