@@ -25,6 +25,22 @@ abstract class BasicModel
 	protected $editable = true;
 	
 	
+	// ##### error constants #################################################################################
+	
+	const ERROR_RECORD_NOT_FOUND		= 'ERR_RECORD_NOT_FOUND';
+	const ERROR_INSERT_FAILED			= 'ERR_INSERT_FAILED';
+	const ERROR_INSERT_FORBIDDEN		= 'ERR_INSERT_FORBIDDEN';
+	const ERROR_UPDATE_FAILED			= 'ERR_UPDATE_FAILED';
+	const ERROR_UPDATE_FORBIDDEN		= 'ERR_UPDATE_FORBIDDEN';
+	const ERROR_DELETE_FAILED			= 'ERR_DELETE_FAILED';
+	const ERROR_DELETE_FORBIDDEN		= 'ERR_DELETE_FORBIDDEN';
+	const ERROR_FIELD_UNKNOWN			= 'ERR_FIELD_UNKNOWN';
+	const ERROR_FIELD_PROTECTED			= 'ERR_FIELD_PROTECTED';
+	const ERROR_MANDATORY_MISSING		= 'ERR_MANDATORY_MISSING';
+	const ERROR_UNIQUE_FIELD_DUPLICATE	= 'ERR_UNIQUE_FIELD_DUPLICATE';
+	
+	
+	
 	// ##### magic methods ###################################################################################
 	
 	/**
@@ -51,6 +67,7 @@ abstract class BasicModel
 	 */
 	protected function __clone()
 	{
+		
 	}
 	
 	
@@ -105,7 +122,7 @@ abstract class BasicModel
 	 * Loads a single instance by using the unique primary key field
 	 *
 	 * @param	string $id
-	 * @return	BasicModel
+	 * @return	\MBuscher\BasicModel
 	 * @throws	\NotFoundException
 	 */
 	public static function load($id, array $options = [])
@@ -121,6 +138,15 @@ abstract class BasicModel
 	}
 	
 	
+	/**
+	 * finds a bunch of instances using the filter parameter
+	 * 
+	 * @param	array		$filter
+	 * @param 	array		$sort
+	 * @param 	array 		$limit
+	 * @param 	array 		$options
+	 * @return 	\MBuscher\BasicModel[]
+	 */
 	public static function find(array $filter, array $sort = null, array $limit = null, array $options = [])
 	{
 		$table = static::getDbTablename();
@@ -139,6 +165,15 @@ abstract class BasicModel
 	}
 	
 	
+	/**
+	 * Finds a single instance by a specific field
+	 * 
+	 * @param	string		$field
+	 * @param	mixed		$value
+	 * @param 	array		$options
+	 * @return	\MBuscher\BasicModel
+	 * @throws 	\Exception
+	 */
 	public static function findOne($field, $value, array $options = [])
 	{
 		$instances = static::find([$field => $value], null, [0,1], $options);
@@ -149,11 +184,17 @@ abstract class BasicModel
 		}
 		else
 		{
-			throw new \NotFoundException(get_called_class(), $field, $value);
+			throw new \Exception("An instance of ".get_called_class()." matching $field = $value could not be found", static::ERROR_RECORD_NOT_FOUND); // @todo use errorcodes
 		}
 	}
 	
 	
+	/**
+	 * Creates a instances without a connection to the database
+	 * 
+	 * @param	array	$data_array
+	 * @return \MBuscher\BasicModel
+	 */
 	public static function compose($data_array)
 	{
 		$instance = new static($data_array);
@@ -163,6 +204,12 @@ abstract class BasicModel
 	}
 	
 	
+	/**
+	 * Creates a new instances in the database
+	 * 
+	 * @param	arrray	$data_array
+	 * @return	\MBuscher\BasicModel
+	 */
 	public static function create($data_array)
 	{
 		$instance = static::compose($data_array);
@@ -173,6 +220,12 @@ abstract class BasicModel
 	}
 	
 	
+	/**
+	 * Finds all instances in the database without any filtering
+	 * 
+	 * @param	array	$options
+	 * @return 	\MBuscher\BasicModel[]
+	 */
 	public final static function all(array $options = [])
 	{
 		return static::find([], null, null, $options);
@@ -181,6 +234,12 @@ abstract class BasicModel
 	
 	// ###### Datenbankinteraktion ##########################################################################################
 	
+	/**
+	 * Writes the dataarray to the database
+	 * 
+	 * @return	boolean
+	 * @throws 	\Exception
+	 */
 	protected function insert()
 	{
 		try
@@ -189,7 +248,7 @@ abstract class BasicModel
 			$right_granted = $this->isInsertAllowed();
 			if ($right_granted == false)
 			{
-				throw new Exception('Creation of a new resource is forbidden', ERROR_INSERT_FORBIDDEN);
+				throw new \Exception('Creation of a new resource is forbidden', static::ERROR_INSERT_FORBIDDEN);
 			}
 	
 			$set_array = $this->data_array;
@@ -201,7 +260,7 @@ abstract class BasicModel
 			$valid = $this->validateInsert($set_array);
 			if ($valid == false)
 			{
-				throw new Exception('Insert validation failed', ERROR_INSERT_FAILED);
+				throw new \Exception('Insert validation failed', static::ERROR_INSERT_FAILED);
 			}
 	
 			// activate the transaction
@@ -210,9 +269,9 @@ abstract class BasicModel
 			// do the insert
 			$id = static::getDb()->insert(static::getDbTablename(), $set_array);
 	
-			if ($id !== false)
+			if ($id > 0)
 			{
-				$new_instance = static::load($id); // @todo was tun wenn ID-Feld nicht unterstützt wird?
+				$new_instance = static::load($id, ['use_cache' => false]);
 				$record_data = $new_instance->getDataArray();
 				unset($new_instance);
 	
@@ -232,9 +291,9 @@ abstract class BasicModel
 				}
 			}
 	
-			throw new Exception('Insert failed', ERROR_INSERT_FAILED);
+			throw new \Exception('Insert failed', static::ERROR_INSERT_FAILED);
 		}
-		catch (Exception $e)
+		catch (\Exception $e)
 		{
 			$this->rollbackTransaction();
 	
@@ -248,7 +307,7 @@ abstract class BasicModel
 	 * @param   array $set_array Array of fields to modify
 	 * @return  boolean
 	 * @author  Markus Buscher
-	 * @throws  Exception
+	 * @throws  \Exception
 	 */
 	public function update(array $set_array)
 	{
@@ -258,7 +317,7 @@ abstract class BasicModel
 			$right_granted = $this->isUpdateAllowed();
 			if ($right_granted == false)
 			{
-				throw new Exception('Update of the resource is forbidden', ERROR_UPDATE_FORBIDDEN);
+				throw new \Exception('Update of the resource is forbidden', static::ERROR_UPDATE_FORBIDDEN);
 			}
 	
 			// save the given set_array for afterInsert-Method
@@ -268,7 +327,7 @@ abstract class BasicModel
 			$valid = $this->validateUpdate($set_array);
 			if ($valid == false)
 			{
-				throw new Exception('Update validation failed', ERROR_UPDATE_FAILED);
+				throw new \Exception('Update validation failed', static::ERROR_UPDATE_FAILED);
 			}
 	
 			$old_data_array = $this->getDataArray();
@@ -278,6 +337,8 @@ abstract class BasicModel
 	
 			// remove all fields, which are not part of the database
 			$update_array = array_intersect_key($set_array, static::getDbFields());
+			
+			// @todo only update fields, which are different
 	
 			$id_field = static::getIdFieldname();
 			$result = static::getDb()->update(static::getDbTablename(), [$id_field => $this->id()], $update_array);
@@ -300,9 +361,9 @@ abstract class BasicModel
 				}
 			}
 	
-			throw new Exception('Update failed', ERROR_UPDATE_FAILED);
+			throw new \Exception('Update failed', static::ERROR_UPDATE_FAILED);
 		}
-		catch (Exception $e)
+		catch (\Exception $e)
 		{
 			$this->rollbackTransaction();
 	
@@ -310,6 +371,13 @@ abstract class BasicModel
 		}
 	}
 	
+	
+	/**
+	 * Deletes an instance from the database
+	 * 
+	 * @return boolean
+	 * @throws \Exception
+	 */
 	public function delete()
 	{
 		try
@@ -318,7 +386,7 @@ abstract class BasicModel
 			$right_granted = $this->isDeleteAllowed();
 			if ($right_granted == false)
 			{
-				throw new Exception('Deletion of the resource is forbidden', ERROR_DELETE_FORBIDDEN);
+				throw new Exception('Deletion of the resource is forbidden', static::ERROR_DELETE_FORBIDDEN);
 			}
 	
 			// activate the transaction
@@ -345,15 +413,16 @@ abstract class BasicModel
 				}
 			}
 	
-			throw new Exception('Delete failed', ERROR_DELETE_FAILED);
+			throw new Exception('Delete failed', static::ERROR_DELETE_FAILED);
 		}
-		catch (Exception $e)
+		catch (\Exception $e)
 		{
 			$this->rollbackTransaction();
 	
 			throw $e;
 		}
 	}
+	
 	
 	/**
 	 * Starts a transaction
@@ -372,21 +441,23 @@ abstract class BasicModel
 		self::$transaction_semaphor++;
 	}
 	
+	
 	/**
 	 * Commits a transaction
 	 *
 	 * @param   void
 	 * @return  void
 	 * @author  Markus Buscher
+	 * @throws	\Exception
 	 */
 	protected function commitTransaction()
 	{
 		self::$transaction_semaphor--;
-	
+		
 		if (self::$transaction_semaphor == 0)
 		{
 			$this->beforeCommitTransaction();
-	
+				
 			// @todo static::getDb()->commitTransaction();
 		}
 	}
@@ -425,10 +496,17 @@ abstract class BasicModel
 	
 	// ##### Interaktionshandler ##########################################################################################
 	
+	
+	/** 
+	 * Is insert on this instance allowed
+	 * 
+	 * @return boolean
+	 */
 	protected function isInsertAllowed()
 	{
 		return $this->editable;
 	}
+	
 	
 	/**
 	 * Validates the given set_array and removes all fields, which are not available in database
@@ -436,7 +514,7 @@ abstract class BasicModel
 	 * @param   array $set_array array with all fields and values to set on insert
 	 * @return  bool validation result, false stops the insert
 	 * @author  Markus Buscher
-	 * @throws  Exception
+	 * @throws  \Exception
 	 */
 	protected function validateInsert(array &$set_array)
 	{
@@ -454,7 +532,7 @@ abstract class BasicModel
 	
 				if ($result == false)
 				{
-					throw new Exception($e_msg_unknown, ERROR_FIELD_UNKNOWN);
+					throw new \Exception($e_msg_unknown, static::ERROR_FIELD_UNKNOWN);
 				}
 			}
 			else if (static::getDbFieldConfig($key, 'insert') == false)
@@ -465,11 +543,11 @@ abstract class BasicModel
 				{
 					if (static::getDbFieldConfig($key, 'select') == true)
 					{
-						throw new Exception($e_msg_protected, ERROR_FIELD_PROTECTED);
+						throw new \Exception($e_msg_protected, static::ERROR_FIELD_PROTECTED);
 					}
 					else
 					{
-						throw new Exception($e_msg_unknown, ERROR_FIELD_UNKNOWN);
+						throw new \Exception($e_msg_unknown, static::ERROR_FIELD_UNKNOWN);
 					}
 				}
 			}
@@ -489,7 +567,7 @@ abstract class BasicModel
 	
 						if ($result == false)
 						{
-							throw new Exception("Missing mandatory field $key", ERROR_MANDATORY_MISSING);
+							throw new \Exception("Missing mandatory field $key", static::ERROR_MANDATORY_MISSING);
 						}
 						else
 						{
@@ -511,7 +589,7 @@ abstract class BasicModel
 							$exception_message = "$key have to be unique. Another instance (ID: " .
 							$instances[0]->get('_id') . ") already uses the given value \"" .
 							$value . "\".";
-							throw new Exception($exception_message, ERROR_UNIQUE_FIELD_DUPLICATE);
+							throw new \Exception($exception_message, static::ERROR_UNIQUE_FIELD_DUPLICATE);
 						}
 					}
 	
@@ -519,7 +597,7 @@ abstract class BasicModel
 				}
 				else if (static::getDbFieldConfig($key, 'mandatory'))
 				{
-					throw new Exception("Missing mandatory field $key", ERROR_MANDATORY_MISSING);
+					throw new \Exception("Missing mandatory field $key", static::ERROR_MANDATORY_MISSING);
 				}
 				else
 				{
@@ -546,7 +624,7 @@ abstract class BasicModel
 					$exception_message = implode(' & ', $fields) . " have to be a unique combination. " .
 							"Another instance (ID: " . $instances[0]->get('_id') . ") already uses the given " .
 							"combination \"" . implode(' & ', array_values($filter)) . "\".";
-					throw new Exception($exception_message, ERROR_UNIQUE_FIELD_DUPLICATE);
+					throw new \Exception($exception_message, static::ERROR_UNIQUE_FIELD_DUPLICATE);
 				}
 			}
 		}
@@ -576,6 +654,7 @@ abstract class BasicModel
 	
 		return true;
 	}
+	
 	
 	/**
 	 * Predefined Method to overwrite within an inheriting child class to react on unknown fields within the
@@ -620,6 +699,7 @@ abstract class BasicModel
 		return false;
 	}
 	
+	
 	/**
 	 * Predefined afterInsert Method to overwrite within an inheriting child class
 	 *
@@ -633,10 +713,17 @@ abstract class BasicModel
 		return true;
 	}
 	
+	
+	/**
+	 * Is updation of this instance is allowed
+	 * 
+	 * @return boolean
+	 */
 	protected function isUpdateAllowed()
 	{
 		return $this->editable;
 	}
+	
 	
 	/**
 	 * Validates the given set_array and removes all fields, which are not available in database
@@ -644,7 +731,7 @@ abstract class BasicModel
 	 * @param   array $set_array array with all fields and values to set on update
 	 * @return  bool validation result, false stops the update
 	 * @author  Markus Buscher
-	 * @throws  Exception
+	 * @throws  \Exception
 	 */
 	protected function validateUpdate(array &$set_array)
 	{
@@ -656,7 +743,7 @@ abstract class BasicModel
 			$allowed = $this->isDeleteAllowed();
 			if (!$allowed)
 			{
-				throw new Exception('Deletion of the resource is forbidden', ERROR_DELETE_FORBIDDEN);
+				throw new \Exception('Deletion of the resource is forbidden', static::ERROR_DELETE_FORBIDDEN);
 			}
 		}
 	
@@ -672,7 +759,7 @@ abstract class BasicModel
 	
 				if ($result == false)
 				{
-					throw new Exception($e_msg_unknown, ERROR_FIELD_UNKNOWN);
+					throw new \Exception($e_msg_unknown, static::ERROR_FIELD_UNKNOWN);
 				}
 			}
 			else if (static::getDbFieldConfig($key, 'update') == false)
@@ -683,11 +770,11 @@ abstract class BasicModel
 				{
 					if (static::getDbFieldConfig($key, 'select') == true)
 					{
-						throw new Exception($e_msg_protected, ERROR_FIELD_PROTECTED);
+						throw new \Exception($e_msg_protected, static::ERROR_FIELD_PROTECTED);
 					}
 					else
 					{
-						throw new Exception($e_msg_unknown, ERROR_FIELD_UNKNOWN);
+						throw new \Exception($e_msg_unknown, static::ERROR_FIELD_UNKNOWN);
 					}
 				}
 			}
@@ -704,7 +791,7 @@ abstract class BasicModel
 					$result = $this->onUpdateMandatoryFieldMissing($key);
 					if (!$result)
 					{
-						throw new Exception("Field $key is mandatory", ERROR_MANDATORY_MISSING);
+						throw new \Exception("Field $key is mandatory", static::ERROR_MANDATORY_MISSING);
 					}
 					else
 					{
@@ -726,7 +813,7 @@ abstract class BasicModel
 						$exception_message = "$key have to be unique. Another instance (ID: " .
 						$instances[0]->get('_id') . ") already uses the given value \"" .
 						$value . "\".";
-						throw new Exception($exception_message, ERROR_UNIQUE_FIELD_DUPLICATE);
+						throw new \Exception($exception_message, static::ERROR_UNIQUE_FIELD_DUPLICATE);
 					}
 				}
 	
@@ -767,7 +854,7 @@ abstract class BasicModel
 					$exception_message = implode(' & ', $fields) . " have to be a unique combination. " .
 							"Another instance (ID: " . $instances[0]->get('_id') . ") already uses the given " .
 							"combination \"" . implode(' & ', array_values($filter)) . "\".";
-					throw new Exception($exception_message, ERROR_UNIQUE_FIELD_DUPLICATE);
+					throw new \Exception($exception_message, static::ERROR_UNIQUE_FIELD_DUPLICATE);
 				}
 			}
 		}
@@ -787,6 +874,7 @@ abstract class BasicModel
 	
 		return true;
 	}
+	
 	
 	/**
 	 * Predefined Method to overwrite within an inheriting child class to react on unknown fields within the
@@ -831,6 +919,7 @@ abstract class BasicModel
 		return false;
 	}
 	
+	
 	/**
 	 * Predefined afterUpdate Method to overwrite within an inheriting child class
 	 *
@@ -845,16 +934,22 @@ abstract class BasicModel
 		return true;
 	}
 	
+	
+	/**
+	 * Is deletion of this instances allowed
+	 * 
+	 * @return boolean
+	 */
 	protected function isDeleteAllowed()
 	{
 		return $this->editable;
 	}
 	
+	
 	/**
 	 * Predefined afterDelete Method to overwrite within an inheriting child class
 	 *
-	 * @return  bool    everything alright
-	 * @author  Marco Heiming
+	 * @return  boolean    everything alright
 	 */
 	protected function afterDelete()
 	{
@@ -865,10 +960,16 @@ abstract class BasicModel
 	
 	// ##### Instanzfunktionen ############################################################################################
 	
+	/**
+	 * Put the given data array into this instance
+	 * 
+	 * @param array $data_array
+	 */
 	protected function setDataArray(array $data_array)
 	{
 		$this->data_array = $data_array;
 	}
+	
 	
 	/**
 	 * Returns the whole data as an array
@@ -932,6 +1033,13 @@ abstract class BasicModel
 		return $this->getDataArray($hide_internals, $fields);
 	}
 	
+	
+	/**
+	 * Returns the value of the given field
+	 * 
+	 * @param	string		$field
+	 * @return	mixed|NULL
+	 */
 	public function get($field)
 	{
 		// this is a alias for getting the ID-Field
@@ -941,16 +1049,9 @@ abstract class BasicModel
 		}
 		else if (isset($this->data_array[$field]))
 		{
-			$fieldtype = static::getDbFieldConfig($field, 'type');
-
-			switch ($fieldtype)
-			{
-				case 'int':
-					return (int)$this->data_array[$field];
-					
-				default:
-					return $this->data_array[$field];
-			}
+			$datatype = static::getDbFieldConfig($field, 'type');
+			
+			return static::typecastValue($this->data_array[$field], $datatype);
 		}
 		// or return the value of a simple instance variable
 		else if (property_exists($this, $field))
@@ -963,6 +1064,12 @@ abstract class BasicModel
 		}
 	}
 	
+	
+	/**
+	 * Returns the id of this instance
+	 * 
+	 * @return mixed
+	 */
 	public function id()
 	{
 		$id_field = static::getIdFieldname();
@@ -975,6 +1082,14 @@ abstract class BasicModel
 		return $this->get($id_field);
 	}
 	
+	
+	/**
+	 * Sets the value of a given field
+	 * 
+	 *  @param	string	$field
+	 *  @param	mixed	$value
+	 *  @return	boolean success
+	 */
 	public function set($field, $value)
 	{
 		// if it is meant to set an database field, then make the update, ...
@@ -989,6 +1104,13 @@ abstract class BasicModel
 		}
 	}
 	
+	
+	/**
+	 * Reloads the data of this instance from database 
+	 * 
+	 * @return	void
+	 * @throws 	Exception
+	 */
 	public function reload()
 	{
 		try
@@ -998,12 +1120,12 @@ abstract class BasicModel
 			$reloaded_instance = static::load($id, ['use_cache' => false]);
 			$this->setDataArray($reloaded_instance->getDataArray());
 		}
-		catch(Exception $e)
+		catch(\Exception $e)
 		{
-			if($e->getCode() === ERROR_RECORD_NOT_FOUND)
+			if($e->getCode() === static::ERROR_RECORD_NOT_FOUND)
 			{
 				$classname = get_called_class();
-				throw new Exception("$classname #$id could not be found in database anymore", ERROR_RECORD_NOT_FOUND);
+				throw new \Exception("$classname #$id could not be found in database anymore", static::ERROR_RECORD_NOT_FOUND);
 			}
 			else 
 			{
@@ -1017,13 +1139,25 @@ abstract class BasicModel
 	
 	// ##### statische Methoden ############################################################################################
 	
-	
+	/**
+	 * Returns an instance of MySqlDb to use within this class
+	 * 
+	 * @return	\MBuscher\MySqlDb
+	 */
 	protected static function getDb()
 	{
 		return MySqlDbStatic::getDbInstance();
 	}
 	
 	
+	/**
+	 * Typecasts the given value to the given datatype
+	 * 
+	 * @param	mixed	$value
+	 * @param	string	$datatype
+	 * @return 	mixed
+	 * @throws 	\Exception
+	 */
 	protected static function typecastValue($value, $datatype)
 	{
 		switch($datatype)
@@ -1040,7 +1174,7 @@ abstract class BasicModel
 				return (int) $value;
 				
 			default:
-				throw new \Exception("Datatype $datatype is not supported", -1); // @todo use errorcodes
+				trigger_error("Datatype $datatype is not supported", E_USER_ERROR);
 		}
 	}
 	
@@ -1106,9 +1240,8 @@ abstract class BasicModel
 			if (!is_a($instance, $current_object_type))
 			{
 				trigger_error('object is not of type ' . $current_object_type . ', given ' . gettype($instance), E_USER_WARNING);
-				// @codeCoverageIgnoreStart
+				
 				continue;
-				// @codeCoverageIgnoreEnd
 			}
 	
 			/** @var BasicModel $instance */
