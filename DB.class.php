@@ -381,6 +381,7 @@ final class MySqlDb
 		}
 	}
 
+	
 	protected function toSql($value, $value_type = '', $empty_as = '')
 	{
 		if($value === NULL)
@@ -517,6 +518,16 @@ final class MySqlDbStatic
 	public static function replace($table, array $set_array, array $options = [])
 	{
 		return static::getDbInstance()->replace($table, $set_array, $options);
+	}
+
+	public static function update($table, array $filter, array $set_array, array $options = [])
+	{
+		return static::getDbInstance()->update($table, $filter, $set_array, $options);
+	}
+	
+	public static function delete($table, array $filter, array $options = [])
+	{
+		return static::getDbInstance()->delete($table, $filter, $options);
 	}
 }
 
