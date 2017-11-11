@@ -132,7 +132,17 @@ final class MySqlDb
 	
 	// ###### Interacting #############################################################################################
 
-
+	/**
+	 * Select field data from the given database table by using filters, sorter and limitations
+	 * 
+	 * @param	string		$table
+	 * @param	array		$fields			Array of fieldnames, empty array resulting in * (all possible fields)
+	 * @param	array		$sort			Array of sorting definitions (["field1" => SORT_ASC, "field2" => SORT_DESC])
+	 * @param	array		$limit			[0,10]
+	 * @param	array		$options		Options
+	 * @return	array	associative array of all selected records
+	 * @throws	MySqlDbException
+	 */
 	public function select($table, array $fields = [], array $filter = null, array $sort = null, array $limit = null, array $options = [])
 	{
 		$use_cache = isset($options['use_cache']) ? (bool)$options['use_cache'] : $this->useCache();
@@ -213,6 +223,15 @@ final class MySqlDb
 	}
 		
 	
+	/**
+	 * Inserts a new record in the given database table
+	 *
+	 * @param	string		$table
+	 * @param	array		$set_array		Array of fields and their values
+	 * @param	array		$options		Options
+	 * @return	int			Inserted record count (should be 1)
+	 * @throws	MySqlDbException
+	 */
 	public function insert($table, array $set_array, array $options = [])
 	{
 		if(!count($set_array))
@@ -264,6 +283,15 @@ final class MySqlDb
 	}
 	
 	
+	/**
+	 * Replaces a record in the given database table through a new one
+	 *
+	 * @param	string		$table
+	 * @param	array		$set_array		Array of fields and their values
+	 * @param	array		$options		Options
+	 * @return	int			Inserted record count (should be 1)
+	 * @throws	MySqlDbException
+	 */
 	public function replace($table, array $set_array, array $options = [])
 	{
 		$options = array_merge($options, ['replace' => true]);
@@ -272,6 +300,16 @@ final class MySqlDb
 	}
 	
 	
+	/**
+	 * Updates records in the given database table with the given set_array
+	 *
+	 * @param	string		$table
+	 * @param	array		$filter			Array of fieldnames, empty array resulting in * (all possible fields)
+	 * @param	array		$set_array		Array of fields and their values
+	 * @param	array		$options		Options
+	 * @return	int			Updated records count (should be >0)
+	 * @throws	MySqlDbException
+	 */
 	public function update($table, array $filter, array $set_array, array $options = [])
 	{
 		if(!count($set_array))
@@ -313,6 +351,15 @@ final class MySqlDb
 	}
 	
 	
+	/**
+	 * Deletes records from the given database table
+	 *
+	 * @param	string		$table
+	 * @param	array		$filter			Array of fieldnames, empty array resulting in * (all possible fields)
+	 * @param	array		$options		Options
+	 * @return	int			Deleted records count (should be >0)
+	 * @throws	MySqlDbException
+	 */
 	public function delete($table, array $filter, array $options = [])
 	{
 		$sql = "DELETE ";
