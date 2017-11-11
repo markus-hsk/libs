@@ -1316,10 +1316,9 @@ abstract class BasicModel
 		{
 			if (!is_a($instance, $current_object_type))
 			{
-				// @codeCoverageIgnoreStart
 				trigger_error('object is not of type ' . $current_object_type . ', given ' . gettype($instance), E_USER_WARNING);
+				
 				continue;
-				// @codeCoverageIgnoreEnd
 			}
 	
 			/** @var BasicModel $instance */
@@ -1348,10 +1347,9 @@ abstract class BasicModel
 		{
 			if (!is_a($instance, $current_object_type))
 			{
-				// @codeCoverageIgnoreStart
 				trigger_error('object is not of type ' . $current_object_type . ', given ' . gettype($instance), E_USER_WARNING);
+				
 				continue;
-				// @codeCoverageIgnoreEnd
 			}
 	
 			if (!array_key_exists($instance->get($fieldname), $references))
@@ -1382,9 +1380,7 @@ abstract class BasicModel
 		{
 			// @todo implement autoload
 			
-			// @codeCoverageIgnoreStart
 			trigger_error('Missing mandatory static var $db_fields in ' . get_called_class(), E_USER_ERROR);
-			// @codeCoverageIgnoreEnd
 		}
 		
 		return static::$db_fields;
