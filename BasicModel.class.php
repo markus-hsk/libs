@@ -165,9 +165,9 @@ abstract class BasicModel
 	
 	public static function create($data_array)
 	{
-		$instance = static::compose([]);
+		$instance = static::compose($data_array);
 		$instance->editable = true;
-		$instance->insert($data_array);
+		$instance->insert();
 	
 		return $instance;
 	}
@@ -208,7 +208,7 @@ abstract class BasicModel
 			$this->startTransaction();
 	
 			// do the insert
-			$id = static::getDb()->insert(static::getTableName(), $set_array);
+			$id = static::getDb()->insert(static::getDbTablename(), $set_array);
 	
 			if ($id !== false)
 			{
@@ -279,8 +279,8 @@ abstract class BasicModel
 			// remove all fields, which are not part of the database
 			$update_array = array_intersect_key($set_array, static::getDbFields());
 	
-			$id_field = static::getIdField();
-			$result = static::getDb()->update(static::getTableName(), [$id_field => $this->id()], $update_array);
+			$id_field = static::getIdFieldname();
+			$result = static::getDb()->update(static::getDbTablename(), [$id_field => $this->id()], $update_array);
 	
 			if ($result == 1)
 			{
@@ -324,8 +324,8 @@ abstract class BasicModel
 			// activate the transaction
 			$this->startTransaction();
 	
-			$id_field = static::getIdField();
-			$result = static::getDb()->delete(static::getTableName(), [$id_field => $this->id()]);
+			$id_field = static::getIdFieldname();
+			$result = static::getDb()->delete(static::getDbTablename(), [$id_field => $this->id()]);
 	
 			if ($result == 1)
 			{
@@ -366,7 +366,7 @@ abstract class BasicModel
 	{
 		if (self::$transaction_semaphor == 0)
 		{
-			static::getDb()->startTransaction();
+			// @todo static::getDb()->startTransaction();
 		}
 	
 		self::$transaction_semaphor++;
@@ -387,7 +387,7 @@ abstract class BasicModel
 		{
 			$this->beforeCommitTransaction();
 	
-			static::getDb()->commitTransaction();
+			// @todo static::getDb()->commitTransaction();
 		}
 	}
 	
@@ -416,7 +416,7 @@ abstract class BasicModel
 	{
 		if (self::$transaction_semaphor > 0)
 		{
-			static::getDb()->rollbackTransaction();
+			// @todo static::getDb()->rollbackTransaction();
 		}
 	
 		self::$transaction_semaphor = 0;
@@ -441,7 +441,7 @@ abstract class BasicModel
 	protected function validateInsert(array &$set_array)
 	{
 		$db_fields = static::getDbFields();
-	
+		
 		// check the given fields
 		foreach ($set_array as $key => $set_value)
 		{
@@ -499,7 +499,7 @@ abstract class BasicModel
 	
 					// typecast value
 					$datatype = static::getDbFieldConfig($key, 'type');
-					$value = typecastValue($datatype, $set_array[$key], $key, []);
+					$value = static::typecastValue($set_array[$key], $datatype);
 	
 					// check unique field
 					if (static::getDbFieldConfig($key, 'unique'))
@@ -714,7 +714,7 @@ abstract class BasicModel
 	
 				// Typecast values
 				$datatype = static::getDbFieldConfig($key, 'type');
-				$value = typecastValue($datatype, $set_array[$key], $key, []);
+				$value = static::typecastValue($set_array[$key], $datatype);
 	
 				// check unique fields
 				if (static::getDbFieldConfig($key, 'unique'))
@@ -1024,6 +1024,27 @@ abstract class BasicModel
 	}
 	
 	
+	protected static function typecastValue($value, $datatype)
+	{
+		switch($datatype)
+		{
+			case 'varchar':
+			case 'char':
+			case 'text':
+			case 'longtext':
+				return (string) $value;
+				
+			case 'int':
+			case 'smallint':
+			case 'bigint':
+				return (int) $value;
+				
+			default:
+				throw new \Exception("Datatype $datatype is not supported", -1); // @todo use errorcodes
+		}
+	}
+	
+	
 	/**
 	 * Returns a timestamp of the latest known update directly from the Cache-Handler
 	 *
@@ -1226,6 +1247,8 @@ abstract class BasicModel
 	{
 		if (!isset(static::$db_fields) || !is_array(static::$db_fields))
 		{
+			// @todo implement autoload
+			
 			// @codeCoverageIgnoreStart
 			trigger_error('Missing mandatory static var $db_fields in ' . get_called_class(), E_USER_ERROR);
 			// @codeCoverageIgnoreEnd
@@ -1257,7 +1280,7 @@ abstract class BasicModel
 			switch ($config)
 			{
 				case 'type':
-					return 'string';
+					return 'text';
 	
 				case 'insert':
 				case 'update':
