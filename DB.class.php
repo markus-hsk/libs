@@ -229,7 +229,7 @@ final class MySqlDb
 	 * @param	string		$table
 	 * @param	array		$set_array		Array of fields and their values
 	 * @param	array		$options		Options
-	 * @return	int			Inserted record count (should be 1)
+	 * @return	int			Inserted record id (should be >0)
 	 * @throws	MySqlDbException
 	 */
 	public function insert($table, array $set_array, array $options = [])
@@ -271,7 +271,7 @@ final class MySqlDb
 		$result = $this->db->query($sql);
 		if($result && !mysqli_errno($this->db))
 		{
-			return $this->db->affected_rows;
+			return $this->db->insert_id;
 		}
 		else
 		{
