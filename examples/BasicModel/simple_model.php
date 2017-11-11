@@ -24,7 +24,7 @@ class ExampleUser	extends BasicModel
 {
 	protected static $db_fields = array(
 			'user_id'	=> ['type' => 'int', 	'insert' => false],
-			'name'		=> ['type' => 'varchar', 'update' => false],
+			'name'		=> ['type' => 'varchar'],
 			'age'		=> ['type' => 'int']
 	);
 	

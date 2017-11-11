@@ -27,17 +27,17 @@ abstract class BasicModel
 	
 	// ##### error constants #################################################################################
 	
-	const ERROR_RECORD_NOT_FOUND		= 'ERR_RECORD_NOT_FOUND';
-	const ERROR_INSERT_FAILED			= 'ERR_INSERT_FAILED';
-	const ERROR_INSERT_FORBIDDEN		= 'ERR_INSERT_FORBIDDEN';
-	const ERROR_UPDATE_FAILED			= 'ERR_UPDATE_FAILED';
-	const ERROR_UPDATE_FORBIDDEN		= 'ERR_UPDATE_FORBIDDEN';
-	const ERROR_DELETE_FAILED			= 'ERR_DELETE_FAILED';
-	const ERROR_DELETE_FORBIDDEN		= 'ERR_DELETE_FORBIDDEN';
-	const ERROR_FIELD_UNKNOWN			= 'ERR_FIELD_UNKNOWN';
-	const ERROR_FIELD_PROTECTED			= 'ERR_FIELD_PROTECTED';
-	const ERROR_MANDATORY_MISSING		= 'ERR_MANDATORY_MISSING';
-	const ERROR_UNIQUE_FIELD_DUPLICATE	= 'ERR_UNIQUE_FIELD_DUPLICATE';
+	const ERROR_RECORD_NOT_FOUND		= -1;
+	const ERROR_INSERT_FAILED			= -2;
+	const ERROR_INSERT_FORBIDDEN		= -3;
+	const ERROR_UPDATE_FAILED			= -4;
+	const ERROR_UPDATE_FORBIDDEN		= -5;
+	const ERROR_DELETE_FAILED			= -6;
+	const ERROR_DELETE_FORBIDDEN		= -7;
+	const ERROR_FIELD_UNKNOWN			= -8;
+	const ERROR_FIELD_PROTECTED			= -9;
+	const ERROR_MANDATORY_MISSING		= -10;
+	const ERROR_UNIQUE_FIELD_DUPLICATE	= -11;
 	
 	
 	
@@ -386,7 +386,7 @@ abstract class BasicModel
 			$right_granted = $this->isDeleteAllowed();
 			if ($right_granted == false)
 			{
-				throw new Exception('Deletion of the resource is forbidden', static::ERROR_DELETE_FORBIDDEN);
+				throw new \Exception('Deletion of the instance is forbidden', static::ERROR_DELETE_FORBIDDEN);
 			}
 	
 			// activate the transaction
